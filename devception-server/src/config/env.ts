@@ -83,4 +83,8 @@ export const env = {
   MEETING_VOTING_MS:    parseInt(process.env.MEETING_VOTING_MS    || '30000', 10),
   MAX_PLAYERS: parseInt(process.env.MAX_PLAYERS || '8', 10),
   MIN_PLAYERS: parseInt(process.env.MIN_PLAYERS || '4', 10),
+
+  // Google Gemini AI Engine
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.8-flash',
 };
