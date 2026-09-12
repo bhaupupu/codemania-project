@@ -93,7 +93,7 @@ export function ImposterActions({ socket, roomCode, players, myUserId }: Props) 
         >
           <div className="flex items-center justify-between font-bold">
             <span style={{ color: sabotageStatus.status === 'active' ? '#ef4444' : '#22c55e' }}>
-              {sabotageStatus.ability === 'puzzle-lock' ? '🧩 Puzzle Lock' : '🤖 False Insight'}
+              {sabotageStatus.ability === 'puzzle-lock' ? `🧩 Puzzle Lock${sabotageStatus.status === 'active' ? ' activated' : ''}` : '🤖 False Insight'}
             </span>
             <span className="uppercase text-[10px] font-mono">
               {sabotageStatus.status}

@@ -86,7 +86,7 @@ export function PuzzleLockModal({ socket, roomCode }: { socket: AppSocket | null
         <h2 id="puzzle-title" className="mt-4 text-2xl font-bold">{solved ? '✓ PUZZLE SOLVED' : '🧩 PUZZLE LOCK'}</h2>
         <p className="mt-2 text-sm text-slate-300" aria-live="polite">{solved ? 'Workspace restored.' : 'Reconstruct the image to regain access to your workspace.'}</p>
         <div ref={grid} className="mx-auto my-5 grid aspect-square grid-cols-4 gap-1" style={{ maxWidth: 'min(100%, 52vh)' }}>
-          {arrangement.map((id, index) => <motion.button key={id} layout transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+          {arrangement.map((id, index) => <motion.button key={id} layout drag={!pending && !solved && connected} dragSnapToOrigin dragMomentum={false} transition={{ type: 'spring', stiffness: 400, damping: 32 }}
             type="button" data-puzzle-slot={index} aria-label={`Tile at row ${Math.floor(index / 4) + 1}, column ${index % 4 + 1}${correct.includes(index) ? ', correctly placed' : ''}`}
             aria-pressed={selected === index} disabled={pending || solved || !connected}
             onPointerDown={e => { if (e.button !== 0) return; pointer.current = { x: e.clientX, y: e.clientY }; setSelected(index); e.currentTarget.setPointerCapture(e.pointerId); }}
@@ -108,7 +108,7 @@ export function PuzzleLockModal({ socket, roomCode }: { socket: AppSocket | null
             }}
             animate={{ scale: selected === index ? 0.94 : 1 }}
             className="relative aspect-square touch-none select-none overflow-hidden rounded-sm bg-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-            style={{ cursor: selected === index ? 'grabbing' : 'grab', boxShadow: selected === index ? '0 0 0 3px #38bdf8' : correct.includes(index) ? '0 0 0 1px #34d399' : 'none' }}>
+            style={{ zIndex: selected === index ? 10 : 0, cursor: selected === index ? 'grabbing' : 'grab', boxShadow: selected === index ? '0 0 0 3px #38bdf8' : correct.includes(index) ? '0 0 0 1px #34d399' : 'none' }}>
             {/* Individual cropped tile: never download or display the original photo. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={activePuzzle.tiles.find(tile => tile.id === id)?.image} alt="" draggable={false} className="h-full w-full pointer-events-none" />
