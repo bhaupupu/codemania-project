@@ -1,3 +1,5 @@
+import * as puzzleService from '../../services/puzzleSabotage.service';
+import { checkCooldown } from '../../services/imposter.service';
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../middleware/socketAuth';
 import * as gameService from '../../services/game.service';
@@ -122,6 +124,14 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket): v
     socket.join(roomCode);
     socket.data.roomCode = roomCode;
     socket.data.leaveAnnounced = false;
+    socket.emit('sabotage:puzzle-state', puzzleService.getActivePuzzleForUser(socket.userId, roomCode));
+    if (game.players.find(p => p.userId === socket.userId)?.role === 'imposter') {
+      const { remainingMs } = checkCooldown(roomCode, 'puzzle');
+      socket.emit('imposter:cooldown-update', { action: 'puzzle', remainingMs, startCooldown: remainingMs > 0, cooldownMs: remainingMs });
+      for (const status of puzzleService.getImposterPuzzles(socket.userId, roomCode)) {
+        socket.emit('imposter:sabotage-status', { ...status, targetName: game.players.find(p => p.userId === status.targetUserId)?.displayName, ability: 'puzzle-lock', status: 'active' });
+      }
+    }
 
     // Broadcast full authoritative state to everyone in the room (including new player).
     // This ensures all clients have consistent player list, isConnected flags, etc.

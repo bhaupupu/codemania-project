@@ -102,7 +102,7 @@ export function ImposterActions({ socket, roomCode, players, myUserId }: Props) 
           <p className="truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
             Target: <strong className="text-white">{sabotageStatus.targetName}</strong>{' '}
             {sabotageStatus.status === 'active'
-              ? '(Solving puzzle...)'
+              ? 'Status: Solving...'
               : sabotageStatus.status === 'solved'
               ? '(Bypassed lock!)'
               : '(Timer expired)'}
@@ -116,7 +116,7 @@ export function ImposterActions({ socket, roomCode, players, myUserId }: Props) 
           🧩 Puzzle Lock <span className="text-[10px] opacity-75">(Locks Editor)</span>
         </p>
         <div className="grid grid-cols-2 gap-1">
-          {others.map((p) => (
+          {others.filter(p => p.role !== 'imposter').map((p) => (
             <SabotageButton
               key={`puzzle-${p.userId}`}
               label={p.displayName.slice(0, 8)}

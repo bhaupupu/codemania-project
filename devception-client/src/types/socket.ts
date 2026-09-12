@@ -47,9 +47,10 @@ export interface ServerToClientEvents {
   'imposter:keyboard-locked': (data: { durationMs: number }) => void;
   'imposter:sabotage-status': (data: import('./game').SabotageTargetStatus) => void;
 
+  'sabotage:puzzle-state': (data: import('./game').ClientPuzzleData | null) => void;
   'sabotage:puzzle-locked': (data: import('./game').ClientPuzzleData) => void;
-  'sabotage:puzzle-unlocked': (data: { success: boolean; reason?: string; message: string }) => void;
-  'sabotage:puzzle-attempt-result': (data: { success: boolean; penaltyMs?: number; message: string }) => void;
+  'sabotage:puzzle-unlocked': (data: { success: boolean; puzzleId: string; reason?: string; message: string }) => void;
+  'sabotage:puzzle-attempt-result': (data: { success: boolean; puzzleId: string; correctPositions: number[]; message: string }) => void;
 
   'sabotage:false-insight-received': (data: import('./game').FalseInsightData) => void;
   'sabotage:false-insight-result': (data: {
@@ -98,7 +99,7 @@ export interface ClientToServerEvents {
   'imposter:puzzle-lock': (data: { roomCode: string; targetUserId: string }) => void;
   'imposter:false-insight': (data: { roomCode: string; targetUserId: string }) => void;
 
-  'sabotage:puzzle-solve': (data: { roomCode: string; puzzleId: string; selectedOptionId: string }) => void;
+  'sabotage:puzzle-solve': (data: { roomCode: string; puzzleId: string; arrangement: string[] }) => void;
   'sabotage:insight-respond': (data: { roomCode: string; insightId: string; choice: 'accept' | 'reject' }) => void;
 
   'meeting:call': (data: { roomCode: string }) => void;

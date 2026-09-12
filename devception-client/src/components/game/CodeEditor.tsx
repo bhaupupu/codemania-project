@@ -1,4 +1,6 @@
 'use client';
+
+import { useGameStore } from '@/store/gameStore';
 import { useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useEditorStore } from '@/store/editorStore';
@@ -66,7 +68,8 @@ interface Props {
 export function CodeEditor({ roomCode, onCursorMove, language, readOnly = false, onProtectedViolation }: Props) {
   const { data: session } = useSession();
   const canBypassProtection = DEMO_ACCOUNTS.includes(session?.user?.email ?? '');
-  const finalReadOnly = readOnly;
+  const puzzleLocked = useGameStore(state => !!state.activePuzzle);
+  const finalReadOnly = readOnly || puzzleLocked;
 
   const { protectedRanges, cursors } = useEditorStore();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -186,7 +189,7 @@ export function CodeEditor({ roomCode, onCursorMove, language, readOnly = false,
     // Send updates to the server
     /* eslint-disable @typescript-eslint/no-explicit-any */
     ydoc.on('update', (update: Uint8Array, origin: any) => {
-      if (origin !== 'server') {
+      if (origin !== 'server' && !useGameStore.getState().activePuzzle) {
         socket.emit('editor:ydoc-sync', { roomCode, update: update.buffer as ArrayBuffer });
       }
     });

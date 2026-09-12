@@ -170,14 +170,14 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
   );
 
   // ─── Sabotage: Puzzle Lock ──────────────────────────────────────────────────
-  // Imposter locks a target developer with a visual pattern/security puzzle.
+  // Imposter locks a target developer with a 4×4 image unscrambling puzzle.
   // The target must solve the server-authoritative puzzle before resuming editing.
   socket.on(
     'imposter:puzzle-lock',
     ({ roomCode, targetUserId }: { roomCode: string; targetUserId: string }) => {
       const game = gameService.getLiveGame(roomCode);
       const player = game?.players.find((p) => p.userId === socket.userId);
-      if (!player || player.role !== 'imposter') return;
+      if (!player?.isAlive || player.role !== 'imposter' || game?.phase !== 'in-progress') return;
 
       const { allowed, remainingMs } = imposterService.checkCooldown(roomCode, 'puzzle');
       if (!allowed) {
@@ -190,9 +190,10 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
         return;
       }
 
+      if (puzzleSabotageService.getActivePuzzleForUser(targetUserId, roomCode)) return;
       imposterService.recordAction(roomCode, 'puzzle');
 
-      const durationMs = 30000; // 30s limit
+      const durationMs = 20000; // Countdown target; only a verified solution unlocks.
       const { clientPuzzle } = puzzleSabotageService.createPuzzleSabotage(
         roomCode,
         socket.userId,
@@ -214,27 +215,6 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
         expiresAt: clientPuzzle.expiresAt,
       });
 
-      // Auto-unlock timer if player does not solve within duration
-      setTimeout(() => {
-        const active = puzzleSabotageService.getActivePuzzleForUser(targetUserId);
-        if (active && active.puzzleId === clientPuzzle.puzzleId) {
-          puzzleSabotageService.clearPuzzle(clientPuzzle.puzzleId);
-          const currentTargetSocket = io.sockets.sockets.get(targetPlayer.socketId);
-          currentTargetSocket?.emit('sabotage:puzzle-unlocked', {
-            success: true,
-            reason: 'timeout-bypass',
-            message: 'Emergency bypass protocol activated. Workspace unlocked.',
-          });
-
-          socket.emit('imposter:sabotage-status', {
-            targetUserId,
-            targetName: targetPlayer.displayName,
-            ability: 'puzzle-lock',
-            status: 'expired',
-          });
-        }
-      }, durationMs + 200);
-
       const sharedCooldownMs = game?.settings?.impostorCooldownMs ?? 45000;
       socket.emit('imposter:cooldown-update', {
         action: 'puzzle',
@@ -249,12 +229,14 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
   // Target player submits solution for visual puzzle
   socket.on(
     'sabotage:puzzle-solve',
-    ({ roomCode, puzzleId, selectedOptionId }: { roomCode: string; puzzleId: string; selectedOptionId: string }) => {
-      const result = puzzleSabotageService.verifyPuzzleSolution(puzzleId, socket.userId, selectedOptionId);
+    ({ roomCode, puzzleId, arrangement }: { roomCode: string; puzzleId: string; arrangement: unknown }) => {
+      const game = gameService.getLiveGame(roomCode);
+      if (!game?.players.some(p => p.userId === socket.userId && p.isAlive)) return;
+      const result = puzzleSabotageService.verifyPuzzleSolution(puzzleId, socket.userId, roomCode, arrangement);
       if (!result.valid) {
         socket.emit('sabotage:puzzle-attempt-result', {
           success: false,
-          message: 'Puzzle expired or invalid.',
+          puzzleId, correctPositions: [], message: 'Invalid tile arrangement.',
         });
         return;
       }
@@ -262,8 +244,8 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
       if (result.correct) {
         socket.emit('sabotage:puzzle-unlocked', {
           success: true,
-          reason: 'solved',
-          message: 'Security puzzle solved! Workspace restored.',
+          reason: 'solved', puzzleId,
+          message: 'Puzzle solved! Workspace restored.',
         });
 
         // Notify imposter that target solved it
@@ -284,8 +266,8 @@ export function registerImposterHandlers(io: Server, socket: AuthenticatedSocket
       } else {
         socket.emit('sabotage:puzzle-attempt-result', {
           success: false,
-          penaltyMs: 2000,
-          message: 'Incorrect pattern. Recalibrating security matrix (2s lockout)...',
+          puzzleId, correctPositions: result.correctPositions,
+          message: 'Keep rearranging the image.',
         });
       }
     }

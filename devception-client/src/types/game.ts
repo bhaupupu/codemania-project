@@ -91,24 +91,12 @@ export interface GameState {
   };
 }
 
-export type PuzzleType = 'matrix' | 'sequence' | 'anomaly';
-
-export interface PuzzleOption {
-  id: string;
-  label: string;
-  visual: string;
-}
-
 export interface ClientPuzzleData {
   puzzleId: string;
   targetUserId: string;
-  type: PuzzleType;
-  title: string;
-  prompt: string;
-  grid?: string[][];
-  sequence?: string[];
-  items?: string[];
-  options: PuzzleOption[];
+  tiles: { id: string; image: string }[];
+  arrangement: string[];
+  correctPositions: number[];
   durationMs: number;
   expiresAt: number;
 }

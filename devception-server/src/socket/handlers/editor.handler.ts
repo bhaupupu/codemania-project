@@ -1,3 +1,4 @@
+import { getActivePuzzleForUser, clearRoomPuzzles } from '../../services/puzzleSabotage.service';
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../middleware/socketAuth';
 import * as gameService from '../../services/game.service';
@@ -36,6 +37,7 @@ export async function encodeRoomYDocState(roomCode: string, fallbackCode: string
 }
 
 export async function clearYDoc(roomCode: string): Promise<void> {
+  clearRoomPuzzles(roomCode);
   const existing = roomDocs.get(roomCode);
   if (existing) {
     existing.destroy();
@@ -107,10 +109,11 @@ export function registerEditorHandlers(io: Server, socket: AuthenticatedSocket):
       const liveGame = gameService.getLiveGame(roomCode);
       const sender = liveGame?.players.find((p) => p.userId === socket.userId);
       if (!sender?.isAlive) return;
-      if (!update) return;
+      if (!update || getActivePuzzleForUser(socket.userId, roomCode)) return;
 
       const ydoc = await getOrCreateYDoc(roomCode, liveGame?.sharedCode || '');
       
+      if (getActivePuzzleForUser(socket.userId, roomCode)) return;
       const uint8Update = new Uint8Array(update);
       Y.applyUpdate(ydoc, uint8Update, 'client');
 

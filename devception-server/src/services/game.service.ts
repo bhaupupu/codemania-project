@@ -1,3 +1,4 @@
+import { clearRoomPuzzles } from './puzzleSabotage.service';
 import { Game, IGame, IMainTestCaseState, IPlayerState, GamePhase } from '../models/Game.model';
 import { GameHistory } from '../models/GameHistory.model';
 import { User } from '../models/User.model';
@@ -461,6 +462,7 @@ export async function endGame(
   // completion and editor debounce both triggering simultaneously), skip.
   if (game.phase === 'results') return;
 
+  clearRoomPuzzles(roomCode);
   game.phase = 'results';
   game.winner = winner;
   game.endedAt = new Date();

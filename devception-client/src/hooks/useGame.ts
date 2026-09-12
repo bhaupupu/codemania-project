@@ -1,0 +1,162 @@
+'use client';
+import { useEffect } from 'react';
+import { AppSocket } from '@/lib/socket';
+import { useGameStore } from '@/store/gameStore';
+import { useEditorStore } from '@/store/editorStore';
+import { useChatStore } from '@/store/chatStore';
+import { useMeetingStore } from '@/store/meetingStore';
+
+export function useGameEvents(socket: AppSocket | null, roomCode: string) {
+  const gameStore = useGameStore();
+  const editorStore = useEditorStore();
+  const chatStore = useChatStore();
+  const meetingStore = useMeetingStore();
+
+  useEffect(() => {
+    if (!socket || !roomCode) return;
+
+    const rejoin = () => socket.emit('room:join', { roomCode });
+    socket.on('connect', rejoin);
+    rejoin();
+
+    // Room events
+    socket.on('room:state', (game) => {
+      gameStore.setGame(game);
+      // Only initialize the editor from room:state when we're in the lobby.
+      // During an active game, room:state can fire for reconnects/joins and
+      // must NOT re-insert the template — the live Y.Doc is the source of truth.
+      if (game.phase === 'waiting' || game.phase === 'role-reveal') {
+        editorStore.setInitialCode(game.sharedCode ?? '', game.editorVersion ?? 0, game.protectedRanges ?? []);
+      }
+    });
+    socket.on('room:player-joined', gameStore.addPlayer);
+    socket.on('room:player-left', ({ userId }) => gameStore.removePlayer(userId));
+    // Intermediate state during the reconnect grace window — same visual treatment
+    // as `room:player-left` (grayed-out dot) but without a "left the game" chat.
+    // If the player reconnects in time, a subsequent `room:state` restores them.
+    socket.on('room:player-disconnected', ({ userId }) => gameStore.removePlayer(userId));
+    socket.on('room:ready-update', ({ userId }) => gameStore.setPlayerReady(userId));
+    socket.on('room:settings-updated', ({ settings }) => gameStore.setSettings(settings));
+
+    // Game events
+    socket.on('game:role-reveal', ({ role, color }) =>
+      gameStore.setMyRole(role as 'good-coder' | 'imposter', color)
+    );
+    socket.on('game:phase-change', ({ phase, game }) => {
+      gameStore.updatePhase(phase as Parameters<typeof gameStore.updatePhase>[0]);
+      if (game) {
+        // Update game state but do NOT call setInitialCode here.
+        // The CodeEditor bootstraps its Y.Doc via editor:request-state →
+        // server state-vector. Calling setInitialCode would have triggered
+        // a resetNonce cascade causing N×N template duplications.
+        gameStore.setGame(game);
+      }
+      // When the game goes live, re-request the editor state in case the initial
+      // editor:request-state (fired at CodeEditor mount during role-reveal) was
+      // dropped because the Y.Doc wasn't ready yet. The server also pushes the
+      // state proactively, so this is a belt-and-suspenders pull request.
+      if (phase === 'in-progress') {
+        socket.emit('editor:request-state', { roomCode });
+      }
+    });
+    socket.on('game:timer-tick', ({ remainingMs }) => gameStore.updateTimer(remainingMs));
+    socket.on('game:end', ({ winner }) => {
+      gameStore.setActivePuzzle(null);
+      gameStore.setWinner(winner);
+      gameStore.updatePhase('results');
+      meetingStore.endMeeting();
+    });
+
+    // Editor events — op-apply and resync are handled inside CodeEditor.tsx where the
+    // Monaco model is owned. Here we only wire the incidental events.
+    socket.on('editor:cursor-update', (cursor) => editorStore.updateCursor(cursor));
+    socket.on('editor:test-results', ({ testCases }) => gameStore.updateTestCases(testCases));
+    socket.on('editor:protected-violation', ({ message }) => {
+      chatStore.addSystemMessage({ type: 'system', message: `🔒 ${message}`, timestamp: Date.now() });
+    });
+
+    // Task events
+    socket.on('task:completed', ({ taskId, completedBy, sharedProgress }) => {
+      gameStore.completeTask(taskId, completedBy);
+      gameStore.updateProgress(sharedProgress);
+    });
+    socket.on('task:progress-update', ({ sharedProgress }) => {
+      gameStore.updateProgress(sharedProgress);
+    });
+
+    // Imposter effects
+    socket.on('imposter:keyboard-locked', ({ durationMs }: { durationMs: number }) => {
+      gameStore.setLocked(true);
+      setTimeout(() => gameStore.setLocked(false), durationMs);
+    });
+
+    socket.on('sabotage:puzzle-locked', (puzzle) => {
+      gameStore.setActivePuzzle(puzzle);
+    });
+
+    socket.on('sabotage:puzzle-state', (puzzle) => gameStore.setActivePuzzle(puzzle));
+
+    socket.on('sabotage:false-insight-received', (insight) => {
+      gameStore.setActiveInsight(insight);
+    });
+
+    // Chat events
+    socket.on('chat:message', (msg) => chatStore.addMessage(msg));
+    socket.on('chat:clear', () => chatStore.clear());
+    socket.on('chat:system', (msg) => chatStore.addSystemMessage(msg));
+
+    // Meeting events
+    socket.on('meeting:start', ({ meetingId, calledBy, calledByName, discussionMs, votingMs }) => {
+      meetingStore.startMeeting({
+        meetingId, calledBy, calledByName,
+        discussionMs: discussionMs ?? 60000,
+        votingMs: votingMs ?? 30000,
+      });
+      gameStore.updatePhase('meeting');
+    });
+    socket.on('meeting:phase-change', ({ phase }) => {
+      meetingStore.setPhase(phase as 'discussion' | 'voting' | 'results');
+      if (phase === 'voting') gameStore.updatePhase('voting');
+    });
+    socket.on('meeting:vote-cast', ({ voterId }) => meetingStore.markVoted(voterId));
+    socket.on('meeting:results', ({ tally, ejected, wasTie }) => {
+      meetingStore.setResults({ tally, ejected, wasTie });
+      if (ejected) gameStore.markPlayerAlive(ejected.userId, false);
+    });
+    socket.on('meeting:end', () => {
+      meetingStore.endMeeting();
+      gameStore.updatePhase('in-progress');
+    });
+
+    return () => {
+      socket.off('room:state');
+      socket.off('room:player-joined');
+      socket.off('room:player-left');
+      socket.off('room:player-disconnected');
+      socket.off('room:ready-update');
+      socket.off('room:settings-updated');
+      socket.off('game:role-reveal');
+      socket.off('game:phase-change');
+      socket.off('game:timer-tick');
+      socket.off('game:end');
+      socket.off('editor:cursor-update');
+      socket.off('editor:test-results');
+      socket.off('editor:protected-violation');
+      socket.off('task:completed');
+      socket.off('task:progress-update');
+      socket.off('imposter:keyboard-locked');
+      socket.off('sabotage:puzzle-locked');
+      socket.off('sabotage:puzzle-state');
+      socket.off('connect', rejoin);
+      socket.off('sabotage:false-insight-received');
+      socket.off('chat:message');
+      socket.off('chat:clear');
+      socket.off('chat:system');
+      socket.off('meeting:start');
+      socket.off('meeting:phase-change');
+      socket.off('meeting:vote-cast');
+      socket.off('meeting:results');
+      socket.off('meeting:end');
+    };
+  }, [socket, roomCode]);
+}
