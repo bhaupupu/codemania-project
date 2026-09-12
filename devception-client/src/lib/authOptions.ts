@@ -1,0 +1,96 @@
+import { NextAuthOptions } from 'next-auth';
+import GoogleProvider from 'next-auth/providers/google';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
+
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || 'dev-secret-change-me';
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      id: 'guest',
+      name: 'Guest',
+      credentials: {
+        displayName: { label: 'Display Name', type: 'text' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.displayName) return null;
+        const guestId = `guest_${randomUUID()}`;
+        return {
+          id: guestId,
+          name: credentials.displayName,
+          email: `${guestId}@guest.devception.com`,
+          image: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(credentials.displayName)}`,
+        };
+      },
+    }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    }),
+    CredentialsProvider({
+      name: 'Email',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+          const res = await fetch(`${apiUrl}/auth/login-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+          });
+          if (!res.ok) return null;
+          const data = await res.json() as { sub: string; name: string; email: string; picture: string };
+          return { id: data.sub, name: data.name, email: data.email, image: data.picture };
+        } catch {
+          return null;
+        }
+      },
+    }),
+  ],
+  secret: NEXTAUTH_SECRET,
+  session: {
+    strategy: 'jwt',
+    maxAge: 7 * 24 * 60 * 60,
+  },
+  callbacks: {
+    async jwt({ token, user, account, profile }) {
+      if (user) {
+        token.sub = user.id ?? token.sub;
+        token.name = user.name ?? token.name;
+        token.email = user.email ?? token.email;
+        token.picture = (user as { image?: string }).image ?? token.picture;
+      }
+      if (account && profile) {
+        token.sub = profile.sub ?? token.sub;
+        token.picture = (profile as { picture?: string }).picture ?? token.picture;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as { id?: string }).id = token.sub ?? '';
+      }
+      const accessToken = jwt.sign(
+        {
+          sub: token.sub,
+          name: token.name,
+          email: token.email,
+          picture: token.picture,
+        },
+        NEXTAUTH_SECRET,
+        { algorithm: 'HS256', expiresIn: '7d' }
+      );
+      (session as { accessToken?: string }).accessToken = accessToken;
+      return session;
+    },
+  },
+  pages: {
+    signIn: '/login',
+  },
+};
