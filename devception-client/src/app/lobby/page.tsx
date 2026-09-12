@@ -1,0 +1,162 @@
+'use client';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Suspense } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+
+function LobbyContent() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const user = session?.user;
+
+  const hasConflict = searchParams.get('error') === 'active-game-conflict';
+
+  return (
+    <main className="min-h-screen pixel-bg flex flex-col">
+      {/* Top bar */}
+      <header className="flex items-center justify-between px-6 py-3 bg-[#faf8f4] border-b-[3px] border-[#1c1917]">
+        <span className="pixel-font text-sm" style={{ color: 'var(--text-primary)' }}>
+          DEV<span style={{ color: 'var(--accent-blue)' }}>CEPTION</span>
+        </span>
+        <div className="flex items-center gap-4">
+          <span className="font-bold text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {user?.name ?? 'Player'}
+          </span>
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="pixel-btn pixel-btn-light text-xs py-1 px-3"
+            style={{ fontSize: '9px' }}
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {hasConflict && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="game-panel p-6 max-w-md w-full bg-white text-center flex flex-col gap-4">
+              <div className="text-4xl">⚠️</div>
+              <h2 className="pixel-font text-red-600 text-lg">ACTIVE GAME CONFLICT</h2>
+              <p className="font-mono text-sm text-gray-700">
+                You are currently playing in an active game session on another device or tab.
+              </p>
+              <p className="font-mono text-sm text-gray-700">
+                Please finish or leave that game before joining here to prevent synchronization issues.
+              </p>
+              <button
+                onClick={() => window.location.replace('/lobby')}
+                className="pixel-btn pixel-btn-light w-full mt-4"
+              >
+                CHECK AGAIN
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8">
+
+        {/* Title */}
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="text-center"
+        >
+          <h1 className="pixel-font text-2xl mb-3" style={{ color: 'var(--text-primary)', lineHeight: 2 }}>
+            DEV<span style={{ color: 'var(--accent-blue)' }}>CEPTION</span>
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--text-muted)', fontFamily: 'Space Mono, monospace' }}>
+            Code together. Find the imposter.
+          </p>
+        </motion.div>
+
+        {/* Responsive Container for Desktop Layout */}
+        <div className="flex flex-col md:flex-row items-stretch justify-center gap-8 w-full max-w-2xl">
+          {/* Pixel character / avatar area */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="game-panel p-8 flex flex-col items-center justify-center gap-4 flex-1"
+            style={{ minWidth: 200 }}
+          >
+            {/* Simple pixel character */}
+            <div className="relative w-20 h-20 flex items-center justify-center mb-2"
+              style={{ border: '4px solid var(--border)', background: '#dbeafe', fontSize: 48 }}>
+              👤
+            </div>
+            <p className="pixel-font text-sm text-center" style={{ color: 'var(--text-primary)' }}>
+              {user?.name ?? 'Player'}
+            </p>
+            <p className="text-xs text-center break-all" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
+          </motion.div>
+
+          {/* Main menu buttons */}
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex flex-col gap-4 w-full flex-1 justify-center"
+          >
+            <button
+              onClick={() => router.push('/play')}
+              className="pixel-btn pixel-btn-blue w-full py-5 text-base"
+              style={{ fontSize: '12px' }}
+            >
+              ▶  PLAY
+            </button>
+            <button
+              onClick={() => router.push('/profile')}
+              className="pixel-btn pixel-btn-light w-full py-4"
+            >
+              👤  PROFILE
+            </button>
+            <button
+              onClick={() => router.push('/shop')}
+              className="pixel-btn pixel-btn-light w-full py-4"
+            >
+              🛒  SHOP
+            </button>
+          </motion.div>
+        </div>
+
+        {/* Version tag */}
+        <p className="pixel-font" style={{ fontSize: 8, color: 'var(--text-muted)' }}>v0.1.0 — MVP</p>
+      </div>
+
+      {/* Footer */}
+      <footer className="flex flex-col items-center gap-2 py-3 px-4 border-t-[3px] border-[#1c1917]"
+        style={{ background: '#faf8f4' }}>
+        <a
+          href="https://github.com/sponsors/bhaupupu"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pixel-btn pixel-btn-light flex items-center gap-2 px-4 py-1"
+          style={{ fontSize: '9px', borderColor: '#e879a0', color: '#e879a0', boxShadow: '3px 3px 0 #e879a0' }}
+        >
+          ♥ SPONSOR THIS PROJECT
+        </a>
+        <p style={{ color: 'var(--text-muted)', fontFamily: 'Space Mono, monospace', fontSize: '9px' }}>
+          Support keeps this free
+        </p>
+      </footer>
+    </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pixel-bg flex items-center justify-center"><LoadingSpinner size={48} /></div>}>
+      <LobbyContent />
+    </Suspense>
+  );
+}
