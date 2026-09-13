@@ -197,6 +197,6 @@ Open **`http://localhost:3000`** in your browser to launch the landing page and 
 
 ---
 
-## 📄 License
+## 🔒 License
 
-This project is open source and available under the [ISC License](LICENSE).
+Private project. All rights reserved.
